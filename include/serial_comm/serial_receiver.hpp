@@ -17,7 +17,7 @@ public:
 
     SerialReceiver(const std::string& port_name, uint32_t baud_rate = 115200);
     ~SerialReceiver();
-
+    
     SerialReceiver(const SerialReceiver&) = delete;
     SerialReceiver& operator=(const SerialReceiver&) = delete;
 
@@ -36,8 +36,8 @@ private:
 
     void async_read();
     void handle_read(const boost::system::error_code& error, size_t bytes_transferred);
-    bool validate_message(const SerialMessage& msg) const;
-    SerialMessage parse_message(const SerialBuffer& buffer) const;
+    bool validate_message(const SerialMessage& msg) ;
+    SerialMessage parse_message(const SerialBuffer& buffer) ;
 };
 
 } // namespace serial_comm

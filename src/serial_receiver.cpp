@@ -2,7 +2,9 @@
 #include <iostream>
 #include <stdexcept>
 
-namespace serial_comm {
+using namespace std::chrono_literals;
+using namespace serial_comm;
+
 
 SerialReceiver::SerialReceiver(const std::string& port_name, uint32_t baud_rate) 
     : io_context_(std::make_unique<boost::asio::io_context>()),
@@ -84,7 +86,7 @@ void SerialReceiver::handle_read(const boost::system::error_code& error, size_t 
     async_read(); // Continue reading
 }
 
-bool SerialReceiver::validate_message(const SerialMessage& msg) const {
+bool SerialReceiver::validate_message(const SerialMessage& msg)  {
     if (msg.head != SERIAL_MSG_HEAD || msg.tail != SERIAL_MSG_TAIL) {
         return false;
     }
@@ -97,7 +99,7 @@ bool SerialReceiver::validate_message(const SerialMessage& msg) const {
     return crc16_.checksum() == msg.crc16;
 }
 
-SerialMessage SerialReceiver::parse_message(const SerialBuffer& buffer) const {
+SerialMessage SerialReceiver::parse_message(const SerialBuffer& buffer)  {
     SerialMessage msg;
     size_t offset = 0;
     
@@ -138,5 +140,5 @@ SerialMessage SerialReceiver::parse_message(const SerialBuffer& buffer) const {
     return msg;
 }
 
-} // namespace serial_comm
+ // namespace serial_comm
 // TODO

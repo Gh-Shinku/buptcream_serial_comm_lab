@@ -1,73 +1,89 @@
 #include "serial_comm/serial_receiver.hpp"
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/imu.hpp>
+#include <CLI11/CLI11.hpp>
+#include <serial_comm/message.hpp>
 #include <memory>
 #include <chrono>
+#include <iostream>
+#include <iomanip>
+#include <thread>  
 
-class ImuPublisher : public rclcpp::Node {
+class ImuPublisher {
 public:
-    ImuPublisher() : Node("imu_publisher") {
-        // Parameters
-        this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
-        this->declare_parameter<int>("baud_rate", 115200);
-        
-        std::string port = this->get_parameter("serial_port").as_string();
-        int baud_rate = this->get_parameter("baud_rate").as_int();
-        
-        // Create publisher
-        publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
-        
+    ImuPublisher(const std::string& port, int baud_rate) {
         // Create serial receiver
         try {
             receiver_ = std::make_unique<serial_comm::SerialReceiver>(port, baud_rate);
             
             receiver_->set_message_callback([this](const serial_comm::SerialMessage& msg) {
-                this->publish_imu(msg.data);
+                this->print_imu_data(msg.data);
             });
             
             receiver_->start();
-            RCLCPP_INFO(this->get_logger(), "Serial receiver started on port: %s", port.c_str());
+            std::cout << "Serial receiver started on port: " << port << std::endl;
         } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to initialize serial receiver: %s", e.what());
-            rclcpp::shutdown();
+            std::cerr << "Failed to initialize serial receiver: " << e.what() << std::endl;
+            throw;
+        }
+    }
+
+    void run() {
+        while (true) {
+            // Just keep running to receive data
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
 private:
-    void publish_imu(const serial_comm::ImuMessage& imu_data) {
-        auto msg = sensor_msgs::msg::Imu();
+    void print_imu_data(const serial_comm::ImuMessage& imu_data) {
+        auto now = std::chrono::system_clock::now();
+        auto now_time = std::chrono::system_clock::to_time_t(now);
         
-        // Set header
-        msg.header.stamp = this->now();
-        msg.header.frame_id = "imu_link";
+        std::cout << "\n--- IMU Data [" << std::put_time(std::localtime(&now_time), "%T") << "] ---\n";
         
-        // Set orientation
-        msg.orientation.w = imu_data.quaternion.w;
-        msg.orientation.x = imu_data.quaternion.x;
-        msg.orientation.y = imu_data.quaternion.y;
-        msg.orientation.z = imu_data.quaternion.z;
+        // Print quaternion data
+        std::cout << "Orientation (quaternion):\n";
+        std::cout << "  w: " << imu_data.quaternion.w << "\n";
+        std::cout << "  x: " << imu_data.quaternion.x << "\n";
+        std::cout << "  y: " << imu_data.quaternion.y << "\n";
+        std::cout << "  z: " << imu_data.quaternion.z << "\n";
         
-        // Set angular velocity
-        msg.angular_velocity.x = imu_data.angular_velocity.x;
-        msg.angular_velocity.y = imu_data.angular_velocity.y;
-        msg.angular_velocity.z = imu_data.angular_velocity.z;
+        // Print angular velocity
+        std::cout << "Angular velocity (rad/s):\n";
+        std::cout << "  x: " << imu_data.angular_velocity.x << "\n";
+        std::cout << "  y: " << imu_data.angular_velocity.y << "\n";
+        std::cout << "  z: " << imu_data.angular_velocity.z << "\n";
         
-        // Set linear acceleration
-        msg.linear_acceleration.x = imu_data.linear_acceleration.x;
-        msg.linear_acceleration.y = imu_data.linear_acceleration.y;
-        msg.linear_acceleration.z = imu_data.linear_acceleration.z;
+        // Print linear acceleration
+        std::cout << "Linear acceleration (m/s²):\n";
+        std::cout << "  x: " << imu_data.linear_acceleration.x << "\n";
+        std::cout << "  y: " << imu_data.linear_acceleration.y << "\n";
+        std::cout << "  z: " << imu_data.linear_acceleration.z << "\n";
         
-        // Publish
-        publisher_->publish(msg);
+        std::cout << std::endl;
     }
 
     std::unique_ptr<serial_comm::SerialReceiver> receiver_;
-    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
 };
 
 int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ImuPublisher>());
-    rclcpp::shutdown();
+    CLI::App app{"IMU Data Publisher"};
+    
+    // Add command line options
+    std::string port = "/dev/ttyUSB0";
+    int baud_rate = 115200;
+    
+    app.add_option("-p,--port", port, "Serial port device")->check(CLI::ExistingFile);
+    app.add_option("-b,--baud", baud_rate, "Baud rate")->check(CLI::PositiveNumber);
+    
+    CLI11_PARSE(app, argc, argv);
+    
+    try {
+        ImuPublisher publisher(port, baud_rate);
+        publisher.run();
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
     return 0;
 }
