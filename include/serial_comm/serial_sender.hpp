@@ -30,6 +30,7 @@ private:
   std::random_device rd_;
   std::mt19937 gen_;
   std::uniform_real_distribution<double> dist_;
+  std::uniform_real_distribution<double> dist_noise_;
   boost::crc_optimal<16, 0x1021, 0x0000, 0x0000, false, false> crc16_;
   double send_period_sec_;
 

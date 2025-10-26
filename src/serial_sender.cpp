@@ -28,6 +28,7 @@ SerialSender::SerialSender(const SenderArgs &args)
       rd_(),
       gen_(rd_()),
       dist_(0.0, 1.0),
+      dist_noise_(0.0, 1.0),
       crc16_(),
       send_period_sec_(1.0 / std::max<uint32_t>(args.send_frequency, 1)) {
   serial_.set_option(boost::asio::serial_port::baud_rate(115200));
@@ -74,6 +75,11 @@ void SerialSender::put_buf() {
 
 void SerialSender::do_send() {
   put_buf();
+  /* simulate serial noise */
+  if (dist_noise_(gen_) < 0.1) {
+    buffer_[rand() % buffer_.size()] ^= 0xFF;
+  }
+
   async_write(serial_, boost::asio::buffer(buffer_), [this](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
     if (!ec) {
       auto us = static_cast<int64_t>(send_period_sec_ * 1'000'000.0);
