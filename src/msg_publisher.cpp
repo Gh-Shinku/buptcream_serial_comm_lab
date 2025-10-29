@@ -5,67 +5,89 @@
 #include <chrono>
 #include <iostream>
 #include <iomanip>
-#include <thread>  
+#include <thread>
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 
 class ImuPublisher {
 public:
-    ImuPublisher(const std::string& port, int baud_rate) {
+    ImuPublisher(const std::string& port, int baud_rate, rclcpp::Node::SharedPtr node)
+        : node_(node) {
         // Create serial receiver
         try {
             receiver_ = std::make_unique<serial_comm::SerialReceiver>(port, baud_rate);
             
+            // 创建ROS2 IMU消息发布者
+            imu_publisher_ = node_->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
+            
             receiver_->set_message_callback([this](const serial_comm::SerialMessage& msg) {
-                this->print_imu_data(msg.data);
+                this->publish_imu_data(msg.data);
             });
             
             receiver_->start();
-            std::cout << "Serial receiver started on port: " << port << std::endl;
+            RCLCPP_INFO(node_->get_logger(), "Serial receiver started on port: %s", port.c_str());
         } catch (const std::exception& e) {
-            std::cerr << "Failed to initialize serial receiver: " << e.what() << std::endl;
+            RCLCPP_ERROR(node_->get_logger(), "Failed to initialize serial receiver: %s", e.what());
             throw;
         }
     }
 
     void run() {
-        while (true) {
-            // Just keep running to receive data
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        while (rclcpp::ok()) {
+            // 处理ROS2事件，但不会阻塞
+            rclcpp::spin_some(node_);
+            
+            // 保持节点运行
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        
+        // 停止接收
+        if (receiver_) {
+            receiver_->stop();
         }
     }
 
 private:
-    void print_imu_data(const serial_comm::ImuMessage& imu_data) {
-        auto now = std::chrono::system_clock::now();
-        auto now_time = std::chrono::system_clock::to_time_t(now);
+    void publish_imu_data(const serial_comm::ImuMessage& imu_data) {
+        // 创建IMU消息
+        auto msg = std::make_unique<sensor_msgs::msg::Imu>();
         
-        std::cout << "\n--- IMU Data [" << std::put_time(std::localtime(&now_time), "%T") << "] ---\n";
+        // 设置时间戳
+        msg->header.stamp = node_->now();
+        msg->header.frame_id = "imu_link";
         
-        // Print quaternion data
-        std::cout << "Orientation (quaternion):\n";
-        std::cout << "  w: " << imu_data.quaternion.w << "\n";
-        std::cout << "  x: " << imu_data.quaternion.x << "\n";
-        std::cout << "  y: " << imu_data.quaternion.y << "\n";
-        std::cout << "  z: " << imu_data.quaternion.z << "\n";
+        // 填充四元数数据
+        msg->orientation.w = imu_data.quaternion.w;
+        msg->orientation.x = imu_data.quaternion.x;
+        msg->orientation.y = imu_data.quaternion.y;
+        msg->orientation.z = imu_data.quaternion.z;
         
-        // Print angular velocity
-        std::cout << "Angular velocity (rad/s):\n";
-        std::cout << "  x: " << imu_data.angular_velocity.x << "\n";
-        std::cout << "  y: " << imu_data.angular_velocity.y << "\n";
-        std::cout << "  z: " << imu_data.angular_velocity.z << "\n";
+        // 填充角速度数据
+        msg->angular_velocity.x = imu_data.angular_velocity.x;
+        msg->angular_velocity.y = imu_data.angular_velocity.y;
+        msg->angular_velocity.z = imu_data.angular_velocity.z;
         
-        // Print linear acceleration
-        std::cout << "Linear acceleration (m/s²):\n";
-        std::cout << "  x: " << imu_data.linear_acceleration.x << "\n";
-        std::cout << "  y: " << imu_data.linear_acceleration.y << "\n";
-        std::cout << "  z: " << imu_data.linear_acceleration.z << "\n";
+        // 填充线加速度数据
+        msg->linear_acceleration.x = imu_data.linear_acceleration.x;
+        msg->linear_acceleration.y = imu_data.linear_acceleration.y;
+        msg->linear_acceleration.z = imu_data.linear_acceleration.z;
         
-        std::cout << std::endl;
+        // 发布消息
+        imu_publisher_->publish(std::move(msg));
     }
 
     std::unique_ptr<serial_comm::SerialReceiver> receiver_;
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
 };
 
 int main(int argc, char** argv) {
+    // 初始化ROS2
+    rclcpp::init(argc, argv);
+    
+    // 创建ROS2节点
+    auto node = rclcpp::Node::make_shared("imu_publisher");
+    
     CLI::App app{"IMU Data Publisher"};
     
     // Add command line options
@@ -78,12 +100,17 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
     
     try {
-        ImuPublisher publisher(port, baud_rate);
+        ImuPublisher publisher(port, baud_rate, node);
+        
+        // 直接运行发布逻辑，不再使用单独的线程和rclcpp::spin
         publisher.run();
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        RCLCPP_ERROR(node->get_logger(), "Error: %s", e.what());
         return 1;
     }
+    
+    // 关闭ROS2
+    rclcpp::shutdown();
     
     return 0;
 }

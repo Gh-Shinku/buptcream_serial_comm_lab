@@ -29,7 +29,7 @@ SerialReceiver::~SerialReceiver() {
     stop();
 }
 
-void SerialReceiver::set_message_callback(MessageCallback callback) {
+void SerialReceiver::set_message_callback(MessageCallback&& callback) {
     message_callback_ = std::move(callback);
 }
 
@@ -69,6 +69,11 @@ void SerialReceiver::async_read() {
         });
 }
 
+// 在SerialReceiver类的私有成员中添加以下字段
+// (需要在serial_receiver.hpp中也添加对应的声明)
+std::vector<uint8_t> message_buffer_; // 用于累积不完整的消息
+
+// 改进的handle_read实现
 void SerialReceiver::handle_read(const boost::system::error_code& error, size_t bytes_transferred) {
     if (error) {
         if (error == boost::asio::error::operation_aborted) return;
@@ -76,14 +81,54 @@ void SerialReceiver::handle_read(const boost::system::error_code& error, size_t 
         return;
     }
 
-    if (bytes_transferred == SERIAL_MSG_SIZE) {
-        auto msg = parse_message(receive_buffer_);
+    // 将新接收的数据添加到消息缓冲区
+    message_buffer_.insert(message_buffer_.end(), 
+                          receive_buffer_.begin(), 
+                          receive_buffer_.begin() + bytes_transferred);
+
+    // 尝试在缓冲区中查找并解析完整的消息
+    while (message_buffer_.size() >= SERIAL_MSG_SIZE) {
+        // 查找帧头
+        auto head_pos = std::find(message_buffer_.begin(), 
+                                message_buffer_.begin() + (message_buffer_.size() - SERIAL_MSG_SIZE + 1), 
+                                SERIAL_MSG_HEAD);
+
+        if (head_pos == message_buffer_.end()) {
+            // 没有找到完整的帧头，保留最后SERIAL_MSG_SIZE-1个字节，其余清空
+            if (message_buffer_.size() > SERIAL_MSG_SIZE - 1) {
+                std::vector<uint8_t> temp(message_buffer_.end() - (SERIAL_MSG_SIZE - 1), 
+                                         message_buffer_.end());
+                message_buffer_ = std::move(temp);
+            }
+            break;
+        }
+
+        // 计算帧头位置到缓冲区末尾的距离
+        size_t head_idx = head_pos - message_buffer_.begin();
+        
+        // 如果从帧头开始的剩余数据不足以构成完整消息，退出循环
+        if (message_buffer_.size() - head_idx < SERIAL_MSG_SIZE) {
+            break;
+        }
+
+        // 尝试解析消息
+        SerialBuffer temp_buffer;
+        std::memcpy(temp_buffer.data(), 
+                   message_buffer_.data() + head_idx, 
+                   SERIAL_MSG_SIZE);
+
+        auto msg = parse_message(temp_buffer);
+        
+        // 验证消息的完整性（帧头、帧尾和CRC）
         if (validate_message(msg) && message_callback_) {
             message_callback_(msg);
         }
+        
+        // 移除已处理的消息（包括帧头前面的垃圾数据）
+        message_buffer_.erase(message_buffer_.begin(), head_pos + SERIAL_MSG_SIZE);
     }
 
-    async_read(); // Continue reading
+    async_read(); // 继续读取
 }
 
 bool SerialReceiver::validate_message(const SerialMessage& msg)  {

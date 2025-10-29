@@ -21,7 +21,7 @@ public:
     SerialReceiver(const SerialReceiver&) = delete;
     SerialReceiver& operator=(const SerialReceiver&) = delete;
 
-    void set_message_callback(MessageCallback callback);
+    void set_message_callback(MessageCallback&& callback);
     void start();
     void stop();
     bool is_running() const;
@@ -33,6 +33,7 @@ private:
     boost::crc_optimal<16, 0x1021, 0x0000, 0x0000, false, false> crc16_;
     MessageCallback message_callback_;
     bool running_;
+    std::vector<uint8_t> message_buffer_; // 用于累积不完整的消息
 
     void async_read();
     void handle_read(const boost::system::error_code& error, size_t bytes_transferred);

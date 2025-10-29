@@ -24,6 +24,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 set(THIRD_DEPS
   Boost::system
@@ -33,6 +34,7 @@ set(THIRD_DEPS
 
 set(ROS_DEPS
   rclcpp
+  # sensor_msgs::sensor_msgs  # 移除这一行
 )
 
 include_directories(include)
@@ -62,8 +64,30 @@ endif()
 
 if(FINISH_PUBLISHER)
   add_executable(serial_relay_node src/msg_publisher.cpp)
-  target_link_libraries(serial_relay_node PRIVATE lib_serial_receiver)
-  target_link_libraries(serial_relay_node PUBLIC ${THIRD_DEPS})
+  
+  # 移除PRIVATE关键字，使用普通签名
+  target_link_libraries(serial_relay_node
+    lib_serial_receiver
+    ${THIRD_DEPS}
+  )
+  
+  # 使用ament_target_dependencies添加ROS 2依赖
+  ament_target_dependencies(serial_relay_node
+    rclcpp
+    sensor_msgs
+  )
+  
+  # 保留包含目录设置
+  target_include_directories(serial_relay_node PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    ${rclcpp_INCLUDE_DIRS}
+    ${sensor_msgs_INCLUDE_DIRS}
+  )
+  
+  # 确保在安装时也能正确链接
+  install(TARGETS serial_relay_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
 endif()
 
 ament_package()
