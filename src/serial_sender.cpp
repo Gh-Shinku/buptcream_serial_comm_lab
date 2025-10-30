@@ -16,7 +16,7 @@ SenderArgs::SenderArgs() : send_frequency(100), serial_port_name("/dev/ttyUSB0")
 
 template <typename T>
 inline void put_field(uint8_t *buf_ptr, size_t &offset, T field) {
-  std::memcpy(buf_ptr + offset, &field, sizeof(T));
+  std::memcpy(buf_ptr + offset, &field, sizeof(T));  //void *memcpy(void *destin, void *source, unsigned n);
   offset += sizeof(T);
 }
 
