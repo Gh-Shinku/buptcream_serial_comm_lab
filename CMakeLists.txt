@@ -13,9 +13,9 @@ set(CMAKE_BUILD_DIR build)
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 
-set(FINISH_RECEIVER OFF)
-set(TEST_RECEIVER OFF)
-set(FINISH_PUBLISHER OFF)
+set(FINISH_RECEIVER ON)
+set(TEST_RECEIVER ON)
+set(FINISH_PUBLISHER ON)
 
 add_compile_options(-Wall -Wpedantic -Wextra)
 
@@ -24,6 +24,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 set(THIRD_DEPS
   Boost::system
@@ -33,6 +34,7 @@ set(THIRD_DEPS
 
 set(ROS_DEPS
   rclcpp
+  sensor_msgs
 )
 
 include_directories(include)
@@ -63,7 +65,10 @@ endif()
 if(FINISH_PUBLISHER)
   add_executable(serial_relay_node src/msg_publisher.cpp)
   target_link_libraries(serial_relay_node PRIVATE lib_serial_receiver)
-  ament_target_dependencies(serial_relay_node PUBLIC ${THIRD_DEPS})
+  ament_target_dependencies(serial_relay_node PUBLIC ${ROS_DEPS})
+  install(TARGETS serial_relay_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
 endif()
 
 ament_package()
