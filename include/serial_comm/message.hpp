@@ -43,7 +43,7 @@ struct SerialMessage {
 };
 
 template <typename T>
-constexpr std::size_t packed_sizeof() {
+constexpr std::size_t packed_sizeof() {  //函数返回一个constexpr std::size_t类型的东西
   if constexpr (std::is_arithmetic_v<T>) {
     return sizeof(T);
   } else if constexpr (std::is_same_v<T, Quaternion>) {
@@ -59,7 +59,7 @@ constexpr std::size_t packed_sizeof() {
   return 0;
 }
 
-constexpr std::size_t SERIAL_MSG_SIZE = packed_sizeof<SerialMessage>();
+constexpr std::size_t SERIAL_MSG_SIZE = packed_sizeof<SerialMessage>();//SerialMessage就是T
 constexpr std::size_t CRC_FIELD_SIZE = 85;
 }  // namespace serial_comm
 
